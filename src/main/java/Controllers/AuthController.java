@@ -1,10 +1,17 @@
 package Controllers;
 
-import Services.InMemoryAuthService;
+import Beans.Admin;
+import Services.AdminService;
+import Services.JwtService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -12,31 +19,33 @@ import java.util.Map;
 public class AuthController {
 
     @Autowired
-    private InMemoryAuthService inMemoryAuthService;
+    private AdminService adminService;
+
+    @Autowired
+    private JwtService jwtService;
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
         String username = credentials.get("username");
         String password = credentials.get("password");
 
-        Map<String, Object> response = inMemoryAuthService.authenticateAdmin(username, password);
+        Admin admin = adminService.findAdminByUsername(username);
 
-        if ((boolean) response.get("success")) {
-            return ResponseEntity.ok(response);
-        } else {
+        if (admin == null || !adminService.verifyPassword(admin, password)) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Identifiants incorrects");
             return ResponseEntity.status(401).body(response);
         }
-    }
 
-    @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestHeader("Authorization") String token) {
-        inMemoryAuthService.logout(token);
-        return ResponseEntity.ok().body(Map.of("message", "Déconnexion réussie"));
-    }
+        String token = jwtService.generateToken(admin);
 
-    @GetMapping("/validate")
-    public ResponseEntity<?> validateToken(@RequestHeader("Authorization") String token) {
-        boolean isValid = inMemoryAuthService.validateToken(token);
-        return ResponseEntity.ok().body(Map.of("valid", isValid));
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("token", token);
+        response.put("adminId", admin.getId());
+        response.put("username", admin.getUsername());
+
+        return ResponseEntity.ok(response);
     }
 }
